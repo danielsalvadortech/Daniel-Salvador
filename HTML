@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Pokédex Interactiva Completa</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f7f7f7;
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    background-color: #ef5350;
+    padding: 15px;
+    text-align: center;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+#region-selector {
+    margin: 20px auto;
+    text-align: center;
+}
+
+select, button {
+    padding: 10px;
+    font-size: 16px;
+    margin: 5px;
+}
+
+button {
+    cursor: pointer;
+    border-radius: 6px;
+    border: none;
+    background-color: #ef5350;
+    color: white;
+    font-weight: bold;
+}
+
+.tabs {
+    margin: 20px auto;
+    text-align: center;
+}
+
+.tab {
+    display: inline-block;
+    padding: 8px 16px;
+    cursor: pointer;
+    background: #eee;
+    margin: 0 5px;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+.tab.active {
+    background: #ef5350;
+    color: white;
+}
+
+.pokemon-container {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    padding: 10px;
+    justify-items: center;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.pokemon-card {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    width: 190px;
+    text-align: center;
+    padding: 10px;
+    transition: transform 0.2s;
+}
+
+.pokemon-card:hover {
+    transform: scale(1.05);
+}
+
+.gender-container {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.gender-box {
+    text-align: center;
+}
+
+.gender-box img {
+    width: 72px;
+    height: 72px;
+}
+
+.gender-symbol {
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.male { color: #2196f3; }
+.female { color: #e91e63; }
+
+.pokemon-number {
+    font-weight: bold;
+    color: #888;
+}
+
+.type-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    margin: 2px 2px 0 2px;
+    border-radius: 12px;
+    font-size: 12px;
+    color: white;
+    font-weight: bold;
+}
+
+.type-normal { background-color: #A8A77A; }
+.type-fire { background-color: #EE8130; }
+.type-water { background-color: #6390F0; }
+.type-electric { background-color: #F7D02C; }
+.type-grass { background-color: #7AC74C; }
+.type-ice { background-color: #96D9D6; }
+.type-fighting { background-color: #C22E28; }
+.type-poison { background-color: #A33EA1; }
+.type-ground { background-color: #E2BF65; }
+.type-flying { background-color: #A98FF3; }
+.type-psychic { background-color: #F95587; }
+.type-bug { background-color: #A6B91A; }
+.type-rock { background-color: #B6A136; }
+.type-ghost { background-color: #735797; }
+.type-dragon { background-color: #6F35FC; }
+.type-dark { background-color: #705746; }
+.type-steel { background-color: #B7B7CE; }
+.type-fairy { background-color: #D685AD; }
+
+.loader {
+    text-align: center;
+    padding: 40px;
+    font-size: 18px;
+}
+</style>
+</head>
+
+<body>
+
+<header>Pokédex Interactiva (Kanto → Paldea)</header>
+
+<div id="region-selector">
+    <label for="region">Selecciona región: </label>
+    <select id="region">
+        <option value="kanto">Kanto</option>
+        <option value="johto">Johto</option>
+        <option value="hoenn">Hoenn</option>
+        <option value="sinnoh">Sinnoh</option>
+        <option value="unova">Unova</option>
+        <option value="kalos">Kalos</option>
+        <option value="alola">Alola</option>
+        <option value="galar">Galar</option>
+        <option value="paldea">Paldea</option>
+    </select>
+    <button id="toggle-name">Ver nombres Japoneses</button>
+</div>
+
+<div class="tabs">
+    <span class="tab active" data-mode="normal">Normal</span>
+    <span class="tab" data-mode="shiny">Shiny</span>
+    <span class="tab" data-mode="mega">Mega</span>
+    <span class="tab" data-mode="forms">Formas Regionales</span>
+</div>
+
+<div class="pokemon-container" id="pokemon-list"></div>
+
+<script>
+const REGIONS = {
+    kanto: {start: 1, end: 151},
+    johto: {start: 152, end: 251},
+    hoenn: {start: 252, end: 386},
+    sinnoh: {start: 387, end: 493},
+    unova: {start: 494, end: 649},
+    kalos: {start: 650, end: 721},
+    alola: {start: 722, end: 809},
+    galar: {start: 810, end: 898},
+    paldea: {start: 899, end: 1010}
+};
+
+const pokemonListEl = document.getElementById('pokemon-list');
+const regionSelect = document.getElementById('region');
+const tabs = document.querySelectorAll('.tab');
+const toggleNameBtn = document.getElementById('toggle-name');
+
+let currentRegion = regionSelect.value;
+let currentMode = 'normal';
+let showJapanese = false;
+let pokemonData = [];
+let loading = false;
+
+regionSelect.addEventListener('change', () => {
+    currentRegion = regionSelect.value;
+    cargarRegion(currentRegion);
+});
+
+tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentMode = tab.dataset.mode;
+        mostrarPokemonLista();
+    });
+});
+
+toggleNameBtn.addEventListener('click', () => {
+    showJapanese = !showJapanese;
+    toggleNameBtn.textContent = showJapanese ? 
+        'Ver nombres Internacionales' : 
+        'Ver nombres Japoneses';
+    mostrarPokemonLista();
+});
+
+cargarRegion(currentRegion);
+
+async function cargarRegion(region) {
+    if (loading) return;
+    loading = true;
+    pokemonListEl.innerHTML = '<div class="loader">Cargando...</div>';
+
+    const { start, end } = REGIONS[region];
+    pokemonData = [];
+
+    const batchSize = 20;
+    for (let i = start; i <= end; i += batchSize) {
+        const batch = Array.from({length: Math.min(batchSize, end - i + 1)}, (_, idx) => i + idx);
+        const batchData = await Promise.all(batch.map(id => obtenerPokemonCompleto(id)));
+        pokemonData.push(...batchData.filter(Boolean));
+        mostrarPokemonLista(); // mostrar mientras carga por lotes
+    }
+
+    pokemonListEl.scrollTo({ top: 0, behavior: 'smooth' });
+    loading = false;
+}
+
+async function obtenerPokemonCompleto(id) {
+    try {
+        const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+        if (!res.ok) throw new Error("Error Pokémon");
+        const data = await res.json();
+
+        const speciesRes = await fetch(data.species.url);
+        if (!speciesRes.ok) throw new Error("Error Species");
+        const speciesData = await speciesRes.json();
+
+        const name_jp = speciesData.names.find(n => n.language.name === 'ja-Hrkt')?.name
+            || speciesData.names.find(n => n.language.name === 'ja')?.name
+            || data.name;
+
+        const megaForms = [];
+        const regionalForms = [];
+
+        const variedadPromises = speciesData.varieties
+            .filter(v => v.pokemon.name !== data.name)
+            .map(v => fetch(v.pokemon.url).then(r => r.json()));
+        const variedades = await Promise.all(variedadPromises);
+
+        for (const formData of variedades) {
+            const nombre = formData.name;
+            if (nombre.includes('mega')) megaForms.push(formData);
+            if (nombre.includes('alola') || nombre.includes('galar') || nombre.includes('hisui') || nombre.includes('paldea')) {
+                regionalForms.push(formData);
+            }
+        }
+
+        return { base: data, mega: megaForms, regional: regionalForms, genderRate: speciesData.gender_rate, name_jp };
+
+    } catch (err) {
+        console.error(`Error cargando Pokémon #${id}`, err);
+        return null;
+    }
+}
+
+function mostrarPokemonLista() {
+    pokemonListEl.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    for (const entry of pokemonData) {
+        let lista = [];
+        if (currentMode === 'normal' || currentMode === 'shiny') lista = [entry.base];
+        if (currentMode === 'mega') lista = entry.mega.length ? entry.mega : [entry.base];
+        if (currentMode === 'forms') lista = entry.regional.length ? entry.regional : [entry.base];
+
+        for (const pokemon of lista) {
+            const card = document.createElement('div');
+            card.classList.add('pokemon-card');
+
+            const genderContainer = document.createElement('div');
+            genderContainer.classList.add('gender-container');
+
+            const isShiny = currentMode === 'shiny';
+            const genderRate = entry.genderRate;
+
+            const tieneGenero = genderRate !== -1;
+            const soloMacho = genderRate === 0;
+            const soloHembra = genderRate === 8;
+            const tieneSpriteFemenino = !!pokemon.sprites.front_female;
+
+            if (!tieneGenero) {
+                genderContainer.appendChild(crearImagen(pokemon, isShiny));
+            } else if (soloMacho) {
+                genderContainer.appendChild(crearGeneroUnico(pokemon, isShiny, 'male'));
+            } else if (soloHembra) {
+                genderContainer.appendChild(crearGeneroUnico(pokemon, isShiny, 'female'));
+            } else {
+                if (tieneSpriteFemenino) {
+                    genderContainer.appendChild(crearGeneroUnico(pokemon, isShiny, 'male'));
+                    genderContainer.appendChild(crearGeneroUnico(pokemon, isShiny, 'female'));
+                } else {
+                    const box = document.createElement('div');
+                    box.classList.add('gender-box');
+                    box.appendChild(crearImagen(pokemon, isShiny));
+                    const symbol = document.createElement('div');
+                    symbol.classList.add('gender-symbol');
+                    symbol.innerHTML = '<span class="male">♂</span> <span class="female">♀</span>';
+                    box.appendChild(symbol);
+                    genderContainer.appendChild(box);
+                }
+            }
+
+            const num = document.createElement('p');
+            num.classList.add('pokemon-number');
+            num.textContent = `#${pokemon.id.toString().padStart(3,'0')}`;
+
+            const name = document.createElement('p');
+            name.textContent = showJapanese ? entry.name_jp : formatearNombre(pokemon.name);
+
+            card.appendChild(genderContainer);
+            card.appendChild(num);
+            card.appendChild(name);
+
+            pokemon.types.forEach(t => {
+                const span = document.createElement('span');
+                span.textContent = t.type.name.toUpperCase();
+                span.className = `type-badge type-${t.type.name}`;
+                card.appendChild(span);
+            });
+
+            fragment.appendChild(card);
+        }
+    }
+
+    pokemonListEl.appendChild(fragment);
+}
+
+function crearImagen(pokemon, shiny) {
+    const img = document.createElement('img');
+    const src = shiny
+        ? pokemon.sprites.front_shiny || pokemon.sprites.front_default
+        : pokemon.sprites.front_default;
+
+    img.src = src || 'https://via.placeholder.com/72?text=?';
+    img.alt = pokemon.name;
+    return img;
+}
+
+function crearGeneroUnico(pokemon, shiny, genero) {
+    const box = document.createElement('div');
+    box.classList.add('gender-box');
+
+    const img = document.createElement('img');
+    if (genero === 'male') {
+        img.src = shiny
+            ? pokemon.sprites.front_shiny || pokemon.sprites.front_default
+            : pokemon.sprites.front_default;
+    } else {
+        img.src = shiny
+            ? pokemon.sprites.front_shiny_female || pokemon.sprites.front_shiny || pokemon.sprites.front_default
+            : pokemon.sprites.front_female || pokemon.sprites.front_default;
+    }
+    img.src = img.src || 'https://via.placeholder.com/72?text=?';
+    img.alt = pokemon.name;
+
+    const symbol = document.createElement('div');
+    symbol.classList.add('gender-symbol', genero);
+    symbol.textContent = genero === 'male' ? '♂' : '♀';
+
+    box.appendChild(img);
+    box.appendChild(symbol);
+
+    return box;
+}
+
+function formatearNombre(nombre) {
+    return nombre.replace(/-/g, ' ').replace(/\b(\w)/g, l => l.toUpperCase());
+}
+</script>
+
+</body>
+</html>
